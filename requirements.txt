@@ -1,0 +1,9 @@
+streamlit
+scikit-learn
+numpy
+pandas
+requests
+beautifulsoup4
+psycopg2-binary
+python-dotenv
+supabase
