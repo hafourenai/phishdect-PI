@@ -1,6 +1,7 @@
 from supabase import create_client, Client
 import os
 import logging
+import streamlit as st
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -28,11 +29,23 @@ class DatabaseManager:
         return cls._instance
 
     def _init_client(self):
-        url: str = os.getenv("SUPABASE_URL")
-        key: str = os.getenv("SUPABASE_KEY")
+        # Try to get from st.secrets first (for Streamlit Cloud), then fallback to os.getenv
+        url = None
+        key = None
+        
+        try:
+            if "SUPABASE_URL" in st.secrets:
+                url = st.secrets["SUPABASE_URL"]
+            if "SUPABASE_KEY" in st.secrets:
+                key = st.secrets["SUPABASE_KEY"]
+        except:
+            pass
+
+        if not url: url = os.getenv("SUPABASE_URL")
+        if not key: key = os.getenv("SUPABASE_KEY")
         
         if not url or not key:
-            logger.error("SUPABASE_URL or SUPABASE_KEY not found in environment variables.")
+            logger.error("SUPABASE_URL or SUPABASE_KEY not found in environment variables or secrets.")
             self.supabase = None
         else:
             try:
