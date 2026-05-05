@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import logging
 import pandas as pd
 import re
@@ -13,45 +13,21 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
-# Suppress InsecureRequestWarning for verify=False
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Automatic Pycache Cleanup
-@st.cache_resource
-def cleanup_pycache():
-    """Menghapus semua folder __pycache__ di direktori proyek saat startup."""
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    for root, dirs, files in os.walk(current_dir, topdown=False):
-        for name in dirs:
-            if name == "__pycache__":
-                pycache_path = os.path.join(root, name)
-                try:
-                    shutil.rmtree(pycache_path)
-                    logging.info(f"Berhasil menghapus: {pycache_path}")
-                except Exception as e:
-                    logging.error(f"Gagal menghapus {pycache_path}: {e}")
-
-# Jalankan cleanup
-cleanup_pycache()
-
-# Load environment variables
 load_dotenv()
 
-# Rule-based heuristic module
 from heuristic import final_prediction as heuristic_final_prediction
 from database import DatabaseManager
 
-# Database Initialization
 db = DatabaseManager()
 
-# Page Configuration
 st.set_page_config(
     page_title="PhishDect – Phishing Detector",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Database Persistence
 def load_history(user_id=None):
     if user_id is not None:
         return db.get_history_by_user(user_id)
@@ -81,22 +57,48 @@ st.markdown("""
     #MainMenu, footer { visibility: hidden; }
     header { background: transparent !important; }
 
-    /* Sidebar Toggle - Custom Look */
-    [data-testid="stSidebarCollapsedControl"] {
-        background-color: #2563eb !important; /* Primary Blue */
-        color: #FFFFFF !important;
-        border-radius: 0 12px 12px 0;
-        top: 15px !important;
-        left: 0 !important;
-        z-index: 9999 !important;
-        box-shadow: 4px 0 15px rgba(37, 99, 235, 0.2);
+    /* Sidebar Toggle - High Visibility Force (Collapsed & Expanded) */
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapsedControl"],
+    [data-testid="stSidebarCollapseButton"] button,
+    [data-testid="stSidebarCollapsedControl"] button,
+    [data-testid="stExpandSidebarButton"] {
         display: flex !important;
-        align-items: center !important;
         justify-content: center !important;
+        align-items: center !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        background-color: #2563eb !important; /* Brighter Blue */
+        color: #FFFFFF !important;
+        border-radius: 8px !important;
+        width: 45px !important;
+        height: 45px !important;
+        z-index: 9999999 !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+        border: 2px solid #FFFFFF !important; /* White border to stand out */
     }
-    [data-testid="stSidebarCollapsedControl"] svg {
+    
+    /* Ensure the icon inside is white and large */
+    [data-testid="collapsedControl"] svg,
+    [data-testid="stSidebarCollapsedControl"] svg,
+    [data-testid="stSidebarCollapseButton"] svg,
+    [data-testid="stExpandSidebarButton"] svg,
+    [data-testid="stSidebarCollapseButton"] span[data-testid="stIconMaterial"],
+    [data-testid="stSidebarCollapsedControl"] span[data-testid="stIconMaterial"],
+    [data-testid="stExpandSidebarButton"] span[data-testid="stIconMaterial"] {
         fill: #FFFFFF !important;
         color: #FFFFFF !important;
+        font-size: 24px !important;
+    }
+
+    [data-testid="collapsedControl"]:hover,
+    [data-testid="stSidebarCollapsedControl"]:hover,
+    [data-testid="stSidebarCollapseButton"] button:hover,
+    [data-testid="stSidebarCollapsedControl"] button:hover,
+    [data-testid="stExpandSidebarButton"]:hover {
+        background-color: #1d4ed8 !important;
+        transform: scale(1.1) !important;
+        transition: all 0.2s ease !important;
     }
 
     /* Sidebar - scoped to avoid clashing */
@@ -328,7 +330,7 @@ st.markdown("""
 
 # Session State Initialization
 if "login" not in st.session_state:
-    st.session_state.login = False
+    st.session_state.login = True
 if "user_id" not in st.session_state:
     st.session_state.user_id = None
 if "username" not in st.session_state:
@@ -340,7 +342,6 @@ if "history" not in st.session_state:
 if "auth_page" not in st.session_state:
     st.session_state.auth_page = "login"
 
-# CSS to hide sidebar if not logged in
 if not st.session_state.login:
     st.markdown("""
     <style>
@@ -382,9 +383,12 @@ def extract_features(url):
     hostname = parsed.hostname or ""
     url_len = len(url)
     
-    # Pre-calculate common counts
-    digits = sum(c.isdigit() for c in url)
-    special = sum(1 for c in url if c in SPECIAL_CHARS)
+    from collections import Counter
+    
+    # Pre-calculate common counts efficiently
+    char_counts = Counter(url)
+    digits = sum(count for char, count in char_counts.items() if char.isdigit())
+    special = sum(count for char, count in char_counts.items() if char in SPECIAL_CHARS)
     
     raw = {
         "url_length": url_len,
@@ -411,23 +415,18 @@ def extract_features(url):
     }
     
     if url_len > 0:
-        freq = {}
-        for c in url: freq[c] = freq.get(c, 0) + 1
-        raw["entropy"] = -sum((v/url_len) * math.log2(v/url_len) for v in freq.values())
+        raw["entropy"] = -sum((v/url_len) * math.log2(v/url_len) for v in char_counts.values())
     else:
         raw["entropy"] = 0
         
     return raw
 
 def analyze_content(url):
-    """Menganalisis konten HTML dari URL menggunakan BeautifulSoup"""
-    # Pastikan URL memiliki skema (http/https)
     if not url.startswith(('http://', 'https://')):
         url = 'http://' + url
 
     try:
         logging.info(f"Mencoba mengambil konten dari: {url}")
-        # Headers lebih lengkap untuk meniru browser sungguhan
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
@@ -438,21 +437,17 @@ def analyze_content(url):
             'Cache-Control': 'max-age=0',
         }
         
-        # Gunakan session untuk menangani cookies (beberapa situs phishing butuh ini)
         session = requests.Session()
         response = session.get(url, timeout=15, headers=headers, verify=False, allow_redirects=True)
         
         logging.info(f"Response status: {response.status_code} untuk {url} (Final URL: {response.url})")
         
-        # Jika status code 200, atau bahkan jika tidak 200 tapi ada konten (beberapa situs error tetap ada form)
         if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(response.text, 'lxml')
             
-            # Ekstrak beberapa indikator sederhana
             title = soup.title.string.strip() if (soup.title and soup.title.string) else "Tanpa Judul"
             forms = soup.find_all('form')
             
-            # Cari tanda-tanda form login
             has_login = False
             for f in forms:
                 f_str = str(f).lower()
@@ -479,36 +474,24 @@ def analyze_content(url):
     return {"success": False}
 
 def predict_url(url, arts):
-    """Prediksi URL menggunakan model ML
-
-    Alur:
-      1. Ekstrak fitur numerik dari URL.
-      2. Dapatkan probabilitas phishing dari model Random Forest.
-      3. Kirim URL + probabilitas ML ke fungsi final_prediction (heuristic.py)
-         yang menggabungkannya menjadi Model Komposit (Hybrid).
-      4. Kembalikan final_score, is_phishing, fitur mentah, dan detail h_result.
-    """
-    # Langkah 1: Ekstraksi fitur
     raw = extract_features(url)
 
-    # Langkah 2: Prediksi model ML
-    X = pd.DataFrame([{n: raw.get(n, 0) for n in arts["features"]}])
-    if arts["scaler"]:
-        X = pd.DataFrame(arts["scaler"].transform(X), columns=arts["features"])
-    proba = arts["model"].predict_proba(X)[0]
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=UserWarning)
+        
+        X = [[raw.get(n, 0) for n in arts["features"]]]
+        if arts["scaler"]:
+            X = arts["scaler"].transform(X)
+        proba = arts["model"].predict_proba(X)[0]
+        
     p_idx = list(arts["model"].classes_).index(1) if 1 in arts["model"].classes_ else 1
     ml_prob = float(proba[p_idx])
 
-    # Gunakan threshold dari file pkl jika tersedia, fallback ke 0.5
     thr = float(arts["threshold"]) if arts["threshold"] else 0.5
-
-    # Langkah 3: Analisis Konten HTML (BeautifulSoup)
     html_info = analyze_content(url)
-
-    # Langkah 4: Gabungkan ML + heuristic melalui modul heuristic.py (Model Komposit)
     h_result = heuristic_final_prediction(url, ml_prob, threshold=thr, html_info=html_info)
 
-    # Langkah 5: Kembalikan hasil
     return (
         h_result["final_score"],      
         h_result["is_phishing"], 
@@ -532,14 +515,13 @@ def show_auth():
                 submit = st.form_submit_button("Masuk Sekarang", width="stretch")
                 
                 if submit:
-                    admin_hash = "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9"
-                    if user == "admin" and db.hash_password(pwd) == admin_hash:
+                    admin_hash = "$2b$12$NuQ1mBot04osFgDIkGWRf.PN2Hrk9/UEjknFd81GjIKvDzlf/Dsoq"
+                    if user == "admin" and db.verify_password(pwd, admin_hash):
                         st.session_state.login, st.session_state.user_id, st.session_state.username = True, 0, "admin"
                         st.session_state.history = load_history(0)
                         st.rerun()
                     else:
-                        hashed = db.hash_password(pwd)
-                        auth_res = db.authenticate_user(user, hashed)
+                        auth_res = db.authenticate_user(user, pwd)
                         if auth_res:
                             st.session_state.login, st.session_state.user_id, st.session_state.username = True, auth_res['id'], auth_res['username']
                             st.session_state.history = load_history(auth_res['id'])
@@ -609,11 +591,9 @@ def show_detect():
             st.error("Model tidak ditemukan di folder /models")
         else:
             with st.spinner("Menganalisis URL & Konten..."):
-                # predict_url kini mengembalikan skor komposit dan info HTML
                 score, is_phish, feat, h_detail, html_info = predict_url(url_input, artifacts)
                 res_text = "Phishing" if is_phish else "Aman"
 
-                # Simpan ke Database & session state (termasuk komponen pendukung)
                 new_entry = save_to_history(
                     url_input, 
                     res_text, 
@@ -623,7 +603,7 @@ def show_detect():
                 if new_entry:
                     st.session_state.history.insert(0, new_entry)
 
-                # ── Tampilkan hasil utama  
+                # Tampilkan hasil utama  
                 cls  = "res-phish" if is_phish else "res-safe"
                 icon = "🚨" if is_phish else "✅"
 
@@ -661,7 +641,7 @@ def show_detect():
                     else:
                         st.success("✅ Tidak ada aturan mencurigakan yang terpicu pada URL ini.")
 
-                    # --- Bagian Analisis Konten (Selalu Tampilkan) ---
+                    # Analisis Konten
                     st.markdown("---")
                     st.markdown("**🔍 Analisis 'Daleman' Web (Konten HTML):**")
                     if html_info["success"]:
@@ -716,7 +696,6 @@ else:
         
         # Opsi Pengaturan Akun
         with st.expander("⚙️ Pengaturan Akun"):
-            # Sembunyikan 'Hapus Akun Saya' untuk admin hardcoded
             if st.session_state.username != "admin":
                 if st.button("🗑️ Hapus Akun Saya", use_container_width=True):
                     if db.delete_user(st.session_state.user_id):

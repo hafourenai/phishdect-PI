@@ -2,14 +2,13 @@ from supabase import create_client, Client
 import os
 import logging
 import hashlib
+import bcrypt
 import streamlit as st
 from datetime import datetime
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
-# Configure Logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -30,7 +29,6 @@ class DatabaseManager:
         return cls._instance
 
     def _init_client(self):
-        # Try to get from st.secrets first (for Streamlit Cloud), then fallback to os.getenv
         url = None
         key = None
         
@@ -56,14 +54,12 @@ class DatabaseManager:
                 logger.error(f"Error initializing Supabase client: {e}")
                 self.supabase = None
         
-        # Compatibility with app.py's connection status check
         self._pool = self.supabase 
 
     def test_connection(self):
         if not self.supabase:
             return False
         try:
-            # Simple query to test connection
             self.supabase.table("users").select("id").limit(1).execute()
             return True
         except Exception as e:
@@ -71,24 +67,29 @@ class DatabaseManager:
             return False
 
     def hash_password(self, password):
-        """
-        Menghasilkan hash SHA256 dari password.
-        ⚠️ Menggunakan SHA256 (kalah aman dibanding bcrypt)
-        """
-        return hashlib.sha256(password.encode()).hexdigest()
+        salt = bcrypt.gensalt()
+        return bcrypt.hashpw(password.encode(), salt).decode('utf-8')
+
+    def verify_password(self, password, hashed_password):
+        try:
+            return bcrypt.checkpw(password.encode(), hashed_password.encode('utf-8'))
+        except Exception as e:
+            logger.error(f"Error verifying password: {e}")
+            return False
 
     # AUTHENTICATION
-    def authenticate_user(self, username, hashed_password):
+    def authenticate_user(self, username, password):
         if not self.supabase: return None
         try:
             response = self.supabase.table("users") \
-                .select("id, username") \
+                .select("id, username, password") \
                 .eq("username", username) \
-                .eq("password", hashed_password) \
                 .execute()
             
             if response.data:
-                return response.data[0]
+                user_data = response.data[0]
+                if self.verify_password(password, user_data['password']):
+                    return {"id": user_data['id'], "username": user_data['username']}
         except Exception as e:
             logger.error(f"Error authenticating user: {e}")
         
@@ -134,7 +135,6 @@ class DatabaseManager:
     def reset_database(self):
         if not self.supabase: return False
         try:
-            # Note: We use neq("id", 0) as a hack to delete all rows since neq is required
             self.supabase.table("history").delete().neq("id", 0).execute()
             self.supabase.table("users").delete().neq("id", 0).execute()
             logger.info("Database reset: All users and history cleared.")
@@ -208,8 +208,6 @@ class DatabaseManager:
             row_dict = dict(row)
             if row_dict.get('time'):
                 try:
-                    # Supabase returns ISO strings like 2024-05-04T17:00:00+00:00
-                    # We convert it to the format app.py expects
                     dt = datetime.fromisoformat(row_dict['time'].replace('Z', '+00:00'))
                     row_dict['time'] = dt.strftime("%d %b %Y, %H:%M")
                 except Exception as e:

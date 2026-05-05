@@ -4,6 +4,8 @@ numpy
 pandas
 requests
 beautifulsoup4
+lxml
 psycopg2-binary
 python-dotenv
 supabase
+bcrypt
