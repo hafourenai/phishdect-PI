@@ -1,14 +1,17 @@
+# PhishDect - Git Ignore Rules
+
+# Environment & Secrets
 .env
+.env.local
 
-# Local Logs 
-database.log
-history.csv
+# Hide these files from GitHub (as requested)
+.gitignore
+clean.py
 
-# Python Environment
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
 .Python
 env/
 venv/
@@ -28,10 +31,9 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+
+# Streamlit & System
 .streamlit/
 .DS_Store
 Thumbs.db
-
-.gitignore
-
-clean.py
+database.log
