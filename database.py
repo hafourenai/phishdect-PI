@@ -1,6 +1,7 @@
 from supabase import create_client, Client
 import os
 import logging
+import hashlib
 import streamlit as st
 from datetime import datetime
 from dotenv import load_dotenv
@@ -68,6 +69,13 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Test connection failed: {e}")
             return False
+
+    def hash_password(self, password):
+        """
+        Menghasilkan hash SHA256 dari password.
+        ⚠️ Menggunakan SHA256 (kalah aman dibanding bcrypt)
+        """
+        return hashlib.sha256(password.encode()).hexdigest()
 
     # AUTHENTICATION
     def authenticate_user(self, username, hashed_password):

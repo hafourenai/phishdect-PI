@@ -31,3 +31,7 @@ wheels/
 .streamlit/
 .DS_Store
 Thumbs.db
+
+.gitignore
+
+clean.py

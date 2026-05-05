@@ -4,7 +4,6 @@ import pandas as pd
 import re
 import os
 import math
-import hashlib
 import joblib
 import requests
 import urllib3
@@ -66,7 +65,6 @@ st.markdown("""
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
     /* Reset & Typography */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
     .stApp {
         font-family: 'Inter', sans-serif;
@@ -88,8 +86,13 @@ st.markdown("""
         background-color: #2563eb !important; /* Primary Blue */
         color: #FFFFFF !important;
         border-radius: 0 12px 12px 0;
-        top: 15px;
+        top: 15px !important;
+        left: 0 !important;
+        z-index: 9999 !important;
         box-shadow: 4px 0 15px rgba(37, 99, 235, 0.2);
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
     [data-testid="stSidebarCollapsedControl"] svg {
         fill: #FFFFFF !important;
@@ -275,6 +278,49 @@ st.markdown("""
     /* Force text color for all markdown inside result boxes */
     .res-box div, .res-box span, .res-box p {
         color: inherit !important;
+    }
+
+    /* Login Card */
+    .login-card {
+        background: #FFFFFF;
+        padding: 40px;
+        border-radius: 16px;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        text-align: center;
+        margin-bottom: 24px;
+        border: 1px solid #e2e8f0;
+    }
+    .login-card h1 { color: #111111; margin-bottom: 12px; font-weight: 800; }
+    .login-card p { color: #333333; font-size: 16px; font-weight: 500; }
+
+    /* --- RESPONSIVE DESIGN --- */
+    @media (max-width: 768px) {
+        .block-container {
+            padding: 2rem 1rem !important;
+        }
+        .stat-grid {
+            flex-direction: column;
+            gap: 12px;
+        }
+        .stat-item {
+            padding: 16px;
+        }
+        .custom-card, .login-card {
+            padding: 24px 16px !important;
+        }
+        .res-box {
+            flex-direction: column;
+            text-align: center;
+            padding: 20px;
+            gap: 16px;
+        }
+        .res-box div[style*="font-size:36px"] {
+            font-size: 48px !important;
+        }
+        .sidebar-brand {
+            font-size: 20px;
+            padding: 15px 0;
+        }
     }
 
 </style>
@@ -476,7 +522,7 @@ def show_auth():
     st.markdown('<div class="login-container">', unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.markdown('<div class="login-card" style="background:#FFFFFF; padding:40px; border-radius:16px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.1); text-align:center; margin-bottom:24px; border:1px solid #e2e8f0;"><h1 style="color:#111111; margin-bottom:12px; font-weight:800;">🛡️ PhishDect</h1><p style="color:#333333; font-size:16px; font-weight:500;">Sistem Deteksi Phishing Berbasis ML</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="login-card"><h1>🛡️ PhishDect</h1><p>Sistem Deteksi Phishing Berbasis ML</p></div>', unsafe_allow_html=True)
         
         if st.session_state.auth_page == "login":
             with st.form("login_form"):
@@ -486,12 +532,13 @@ def show_auth():
                 submit = st.form_submit_button("Masuk Sekarang", width="stretch")
                 
                 if submit:
-                    if user == "admin" and pwd == "admin123":
+                    admin_hash = "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9"
+                    if user == "admin" and db.hash_password(pwd) == admin_hash:
                         st.session_state.login, st.session_state.user_id, st.session_state.username = True, 0, "admin"
                         st.session_state.history = load_history(0)
                         st.rerun()
                     else:
-                        hashed = hashlib.sha256(pwd.encode()).hexdigest()
+                        hashed = db.hash_password(pwd)
                         auth_res = db.authenticate_user(user, hashed)
                         if auth_res:
                             st.session_state.login, st.session_state.user_id, st.session_state.username = True, auth_res['id'], auth_res['username']
@@ -519,7 +566,7 @@ def show_auth():
                     elif user.lower() == "admin":
                         st.error("Username 'admin' tidak tersedia")
                     else:
-                        hashed = hashlib.sha256(pwd.encode()).hexdigest()
+                        hashed = db.hash_password(pwd)
                         uid, msg = db.register_user(user, hashed)
                         if uid: 
                             st.success(msg)
@@ -651,7 +698,7 @@ def show_history():
     else:
         st.dataframe(df[display_cols], width="stretch", hide_index=True)
     
-    if st.button("Hapus Riwayat (Database)"):
+    if st.button("Hapus Riwayat"):
         db.clear_history(user_id=st.session_state.user_id)
         st.session_state.history = []
         st.rerun()
